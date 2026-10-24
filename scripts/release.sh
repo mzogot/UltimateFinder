@@ -57,7 +57,7 @@ fi
 # MARK: Build and package
 
 SIGN_IDENTITY="$SIGN_IDENTITY" TIMESTAMP=1 UNIVERSAL=1 ./build.sh
-lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/$APP_NAME" || fail "not a universal binary"
+[[ "$(lipo -archs "$APP/Contents/MacOS/$APP_NAME")" == *x86_64*arm64* ]] || fail "not a universal binary"
 codesign --verify --deep --strict "$APP"
 
 echo "▸ Packaging ${DMG}"
