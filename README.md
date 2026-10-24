@@ -13,11 +13,11 @@
 ![Notarized](https://img.shields.io/badge/signed%20%26%20notarized-Apple-black)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[**⬇ Download for macOS**](https://github.com/mzogot/UltimateFinder/releases/latest/download/UltimateFinder.dmg) · [Features](#features) · [Shortcuts](#keyboard-shortcuts) · [Changelog](CHANGELOG.md)
+[**⬇ Download for macOS**](https://github.com/mzogot/UltimateFinder/releases/latest/download/UltimateFinder.dmg) · [What Finder can't do](#what-finder-doesnt-do) · [Features](#features) · [Shortcuts](#keyboard-shortcuts) · [Changelog](CHANGELOG.md)
 
 <br>
 
-<img src="docs/images/hero.png" width="900" alt="The UltimateFinder visor slid down over the desktop, showing a column browser with a sidebar, tabs, color labels and an image preview">
+<img src="docs/images/visor.gif" width="900" alt="Animation: pressing Option-Space slides the UltimateFinder visor down over the desktop, Command-U switches it to split view, and Option-Space slides it away again">
 
 </div>
 
@@ -27,9 +27,35 @@ If you remember [TotalFinder](https://totalfinder.binaryage.com)'s visor, you kn
 
 - **Always one keystroke away.** No switching to the Dock or digging for the right Finder window. The visor appears on the display your mouse is on, takes the keyboard straight away, and gives focus back to the app you were using when it hides.
 - **Works like Finder.** Same shortcuts, same drag-and-drop rules, tabs, back/forward history, Quick Look and color tags. You already know how to use it.
-- **Adds what Finder lacks.** Split view for moving files between two folders, image conversion to JPEG, PNG or WebP, *Copy Name Without Extension*, folders on top in every sort order, *New Text File* and *Open in Terminal*.
+- **Does what Finder doesn't.** Cut and paste, *Copy Name*, *Copy Path* right in the menu, *New Text File*, WebP conversion, split view, and drag-selection that lets you start over. [See the comparison.](#what-finder-doesnt-do)
 - **Light and private.** Native Swift and AppKit, a 2 MB download, no Electron. No account, no telemetry, no network access at all.
 - **Free and open source** under the MIT license.
+
+## What Finder doesn't do
+
+<img src="docs/images/context-menu.png" width="620" alt="UltimateFinder's right-click menu on ten selected photos: Open, Open With, Quick Look, Show in Finder, Cut 10 Items, Copy 10 Items, Copy Name, Copy Name Without Extension, Copy Path, Duplicate, Convert Image with JPEG, PNG and WebP, a red Move to Trash, color labels, Share, New Folder, New Text File and Open in Terminal">
+
+Everything you reach for daily is one right-click away:
+
+| | UltimateFinder | Finder |
+|---|---|---|
+| **Cut and paste files** | *Cut*, or <kbd>⌘</kbd> <kbd>X</kbd> then <kbd>⌘</kbd> <kbd>V</kbd>, also across split view | No Cut: copy, then remember <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>V</kbd> |
+| **Copy Name** | In the menu, one name per line for several files | ✕ |
+| **Copy Name Without Extension** | `photo.jpg` → `photo` | ✕ |
+| **Copy Path** | In the menu, and <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>C</kbd> | Hidden until you hold <kbd>⌥</kbd> |
+| **New Text File** | Creates `untitled.rtf` and lets you name it | ✕ |
+| **Convert Image** | JPEG, PNG **and WebP**, keeps EXIF/GPS | JPEG, PNG, HEIF |
+| **Keep folders on top** | In every sort order | Only when sorting by name |
+| **Split view** | <kbd>⌘</kbd> <kbd>U</kbd>: two folders side by side | Two windows to arrange |
+| **Re-select by dragging** | Drag beside the names, again and again | Drags your files instead ([see below](#selecting-with-the-mouse)) |
+
+### Selecting with the mouse
+
+<img src="docs/images/drag-select.gif" width="760" alt="Side-by-side recording. UltimateFinder: dragging beside the file names selects rows, and dragging again from inside the selection starts a new selection. Finder: the same drag from inside a selection picks up and moves the selected files.">
+
+Finder used to work like this for decades: press **beside** a file name and drag to select rows; press **on** the name to drag the files. Current Finder drags the files whenever you press inside a selection, even beside the name. So when a selection comes out wrong, you have to click somewhere empty and start over, or you move files by accident.
+
+UltimateFinder keeps the old rule, in list view and column view alike. Drag beside the names to select, and drag again to make a new selection straight away. Grab an icon or name to move files.
 
 ## Features
 
