@@ -13,7 +13,7 @@
 ![Notarized](https://img.shields.io/badge/signed%20%26%20notarized-Apple-black)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[**⬇ Download for macOS**](https://github.com/mzogot/UltimateFinder/releases/latest/download/UltimateFinder.dmg) · [What Finder can't do](#what-finder-doesnt-do) · [Features](#features) · [Shortcuts](#keyboard-shortcuts) · [Security](#security) · [Changelog](CHANGELOG.md)
+[**⬇ Download for macOS**](https://github.com/mzogot/UltimateFinder/releases/latest/download/UltimateFinder.dmg) · [What Finder can't do](#what-finder-doesnt-do) · [Features](#features) · [Shortcuts](#keyboard-shortcuts) · [Security](#security) · [Changelog](CHANGELOG.md) · [Releases](https://github.com/mzogot/UltimateFinder/releases)
 
 <br>
 
