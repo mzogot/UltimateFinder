@@ -13,7 +13,7 @@
 ![Notarized](https://img.shields.io/badge/signed%20%26%20notarized-Apple-black)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[**⬇ Download for macOS**](https://github.com/mzogot/UltimateFinder/releases/latest/download/UltimateFinder.dmg) · [What Finder can't do](#what-finder-doesnt-do) · [Features](#features) · [Shortcuts](#keyboard-shortcuts) · [Changelog](CHANGELOG.md)
+[**⬇ Download for macOS**](https://github.com/mzogot/UltimateFinder/releases/latest/download/UltimateFinder.dmg) · [What Finder can't do](#what-finder-doesnt-do) · [Features](#features) · [Shortcuts](#keyboard-shortcuts) · [Security](#security) · [Changelog](CHANGELOG.md)
 
 <br>
 
@@ -160,6 +160,30 @@ UltimateFinder makes **no network connections**: no analytics, no update checks,
 |---|---|---|
 | Desktop, Documents, Downloads, removable and network volumes | The first time you open one of them | macOS asks before any app reads these folders. Folders are only watched while they're on screen, and favorites are stored as plain paths, so you're never asked about a folder you didn't open. |
 | Accessibility | Only if another app already owns your shortcut | The shortcut normally uses Carbon's `RegisterEventHotKey`, which needs no permission. If that combination is taken, UltimateFinder explains why and offers to open System Settings, or you can pick another shortcut. |
+| Full Disk Access | Never asked; optional | Only *Import Finder Favorites* can use it, to read Finder's sidebar list. Without it, the import falls back to macOS's own `sfltool`. |
+
+## Security
+
+UltimateFinder can read and move all your files, so here is what it does to deserve that, and how to check it yourself.
+
+- **Signed and notarized.** Every release is signed with a Developer ID (team `854T64H39D`) and notarized by Apple.
+- **Hardened runtime, no entitlements.** The app asks macOS for no exceptions: no unsigned code, no library injection, no debugging. Only code signed by Apple or by the app's own team can load into it.
+- **No shell commands.** Opening files, *Open in Terminal*, *Show in Finder* and ejecting all go through macOS's `NSWorkspace`. File names are never pasted into a command line, so a name like `$(rm -rf ~)` is just a name.
+- **Never overwrites.** Copying, duplicating, converting and creating files always pick a free name ("Photo 2.png") and fail rather than replace an existing item.
+- **No network, one dependency.** No analytics, updates or telemetry. The only third-party code is [libwebp](https://github.com/SDWebImage/libwebp-Xcode), pinned to an exact version and commit, and used only to write WebP files.
+- **Open source.** Every release is built from the tagged source in this repository with [`scripts/release.sh`](scripts/release.sh).
+
+To check a download, get the versioned DMG and its `.sha256` file from the [release page](https://github.com/mzogot/UltimateFinder/releases/latest), then run this in the folder you saved them to:
+
+```sh
+shasum -a 256 -c UltimateFinder-*.dmg.sha256                                                 # matches the release checksum
+spctl --assess --type open --context context:primary-signature -v UltimateFinder-*.dmg      # notarized by Apple
+codesign -dvv --entitlements - /Applications/UltimateFinder.app 2>&1 | grep -E "Authority|flags"   # after installing
+```
+
+The last line should show `Developer ID Application: Michael Zogot (854T64H39D)` and `flags=0x10000(runtime)`, and no entitlements.
+
+**Found a vulnerability?** Please don't open a public issue. Report it privately as described in [SECURITY.md](SECURITY.md).
 
 ## Build from source
 
