@@ -1,0 +1,9 @@
+.build/
+build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+.DS_Store
+*.dmg
+
+# notarization credentials (see scripts/release.sh)
+.env.release.local

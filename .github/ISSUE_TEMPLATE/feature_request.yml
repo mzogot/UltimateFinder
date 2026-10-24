@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest something UltimateFinder should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe what you're trying to get done, not only the feature you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: finder
+    attributes:
+      label: How does Finder (or TotalFinder) handle it?
+      description: UltimateFinder follows Finder's behaviour unless there's a good reason not to.
