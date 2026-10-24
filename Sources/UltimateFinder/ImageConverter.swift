@@ -38,6 +38,9 @@ enum ImageConverter {
         let errorDescription: String?
     }
 
+    /// 256 megapixels, about 1 GB as 8-bit RGBA (a 16384 × 16384 image).
+    private static let maxPixelCount = 268_435_456
+
     /// True for files ImageIO can decode, which covers JPEG, PNG, WebP, HEIC, GIF, TIFF and more.
     static func canConvert(_ url: URL) -> Bool {
         guard let type = contentType(of: url), type.conforms(to: .image) else { return false }
@@ -80,6 +83,14 @@ enum ImageConverter {
         let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, index, nil) as? [CFString: Any] ?? [:]
         let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
         let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+        // Checked before decoding: a small file can declare a size that takes gigabytes to decode.
+        let (pixels, overflow) = width.multipliedReportingOverflow(by: height)
+        guard width > 0, height > 0, !overflow, pixels <= maxPixelCount else {
+            throw ConversionError(errorDescription: "“\(name)” is too large to convert.")
+        }
+        if format == .webp, max(width, height) > WEBP_MAX_DIMENSION {
+            throw ConversionError(errorDescription: "“\(name)” is too large for WebP, which allows at most \(WEBP_MAX_DIMENSION) pixels per side.")
+        }
 
         // A full-size "thumbnail" applies the EXIF orientation to the pixels, which WebP needs
         // and which spares the other formats from carrying the tag over.
@@ -108,6 +119,7 @@ enum ImageConverter {
         let base = source.deletingPathExtension().lastPathComponent
         let destination = FileOperations.unusedURL(named: "\(base).\(format.fileExtension)", in: source.deletingLastPathComponent())
         try data.write(to: destination, options: .withoutOverwriting)
+        FileOperations.copyQuarantine(from: source, to: destination)
         return destination
     }
 

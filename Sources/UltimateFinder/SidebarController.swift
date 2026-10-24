@@ -252,7 +252,7 @@ final class SidebarController: NSObject, NSTableViewDataSource, NSTableViewDeleg
     }
 
     private func draggedFolders(_ info: NSDraggingInfo) -> [URL]? {
-        let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        let urls = info.draggingPasteboard.existingFileURLs
         guard !urls.isEmpty else { return nil }
         let folders = urls.filter {
             let values = try? $0.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])

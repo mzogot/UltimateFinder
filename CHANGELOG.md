@@ -6,6 +6,23 @@ Add entries under **Unreleased** as you work, then run `scripts/bump-version.sh 
 
 ## [Unreleased]
 
+## [1.11.1] — 2026-10-24
+
+### Security
+- *Open in Terminal* checks that the folder is still a folder right before opening it. Terminal runs scripts it's handed, so a folder someone else replaced with a script (in a shared folder or on a network volume) could otherwise have been run.
+- Moving and renaming can no longer replace an item that appeared under the new name a moment earlier.
+- *Convert Image* refuses images larger than 256 megapixels before decoding them, so a small file that claims a huge size can't use up the Mac's memory. WebP's size limit is checked before decoding too.
+- Files dragged or pasted in from other apps are checked first: paths such as `folder/..` are cleaned up, and items that don't exist are ignored.
+
+### Changed
+- Converted images keep the original's download quarantine, as copies do.
+- When the shortcut no longer needs Accessibility access but UltimateFinder still has it, the menu-bar menu says so and links to System Settings.
+- Tabs restored at launch skip saved locations that are no longer folders. Clicking a favorite that has become a file beeps instead of opening it as a folder.
+
+### Fixed
+- Color labels on a symlink now read the link's own tags, not its target's.
+- *Import Finder Favorites* gives up after 10 seconds if macOS's `sfltool` hangs, instead of freezing the visor.
+
 ## [1.11.0] — 2026-10-24
 
 ### Changed

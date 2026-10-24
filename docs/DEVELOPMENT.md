@@ -30,26 +30,24 @@ There are no automated tests. Verify with `swift build` (no warnings) and by exe
 
 `VERSION` is the single source of truth; `build.sh` stamps it into `CFBundleShortVersionString` and `CFBundleVersion`.
 
-1. Add user-facing entries under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md) (Added / Changed / Fixed / Removed).
+1. Add user-facing entries under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md) (Added / Changed / Fixed / Removed / Security).
 2. Run `scripts/bump-version.sh patch|minor|major`. It dates the Unreleased entries under the new version.
 3. Commit (`release: x.y.z`).
 4. Run `scripts/release.sh`. It:
-   - builds a universal, timestamped app;
+   - builds a universal, timestamped app, notarizes it and staples its ticket, so it opens offline after being copied out of the DMG;
    - packs it into `build/UltimateFinder-x.y.z.dmg` with an Applications shortcut, and signs the DMG;
    - submits the DMG to Apple's notary service, waits, and staples the ticket;
    - tags `vx.y.z`, pushes, and creates the GitHub release with the changelog section as its notes. The DMG is attached twice: versioned, and as `UltimateFinder.dmg` for the README's permanent download link.
 
    `scripts/release.sh --no-publish` stops after the notarized DMG.
 
-Notarization credentials live in `.env.release.local` (gitignored):
+Notarization credentials live in the keychain, never on the command line, where any process could read them with `ps`. Store them once; it asks for an app-specific password from account.apple.com:
 
 ```sh
-APPLE_ID=you@example.com
-APPLE_PASSWORD=abcd-efgh-ijkl-mnop   # app-specific password from account.apple.com
-APPLE_TEAM_ID=ABCDE12345             # as in "Developer ID Application: Name (ABCDE12345)"
+xcrun notarytool store-credentials ultimatefinder --apple-id you@example.com --team-id ABCDE12345
 ```
 
-Or store them in the keychain once with `xcrun notarytool store-credentials ultimatefinder` and run `NOTARY_PROFILE=ultimatefinder scripts/release.sh`.
+`release.sh` uses the profile `ultimatefinder`; set `NOTARY_PROFILE` to use another.
 
 ## App icon
 
@@ -73,7 +71,7 @@ Resources/Info.plist             LSUIElement, bundle id, privacy purpose strings
 Resources/AppIcon.png / .icns    app icon (1024 master and the bundled icon set)
 build.sh                         build → .app → stamp version → codesign → run/install
 scripts/bump-version.sh          bump VERSION and date the changelog's Unreleased entries
-scripts/release.sh               universal build → DMG → notarize → staple → GitHub release
+scripts/release.sh               universal build → notarize app → DMG → notarize → staple → GitHub release
 scripts/make-icon.sh             AppIcon.png → AppIcon.icns
 scripts/cutout-icon.swift        cut a generated icon off its fake checkerboard, centre it on the icon grid
 docs/images/                     README screenshots and the GitHub social preview

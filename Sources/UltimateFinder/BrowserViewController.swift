@@ -572,7 +572,10 @@ final class BrowserViewController: NSViewController {
     }
 
     func setRoot(_ url: URL, selecting chain: [URL] = []) {
-        root = FileNode(url: url)
+        // A favorite or tab can point at something that has since been replaced by a file.
+        let node = FileNode(url: url)
+        guard node.isDirectory else { NSSound.beep(); return }
+        root = node
         if isListMode {
             showList(url)
             return
@@ -988,7 +991,7 @@ final class BrowserViewController: NSViewController {
 
         let destination = node.url.deletingLastPathComponent().appendingPathComponent(newName)
         do {
-            try FileManager.default.moveItem(at: node.url, to: destination)
+            try FileOperations.moveExclusively(node.url, to: destination)
             select([destination])
         } catch {
             showError(error)
@@ -1100,7 +1103,7 @@ final class BrowserViewController: NSViewController {
     }
 
     private var pasteboardFileURLs: [URL] {
-        NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        NSPasteboard.general.existingFileURLs
     }
 
     private func paste(into folder: FileNode, move: Bool) {
@@ -1159,7 +1162,15 @@ final class BrowserViewController: NSViewController {
 
     private func openInTerminal(_ folder: FileNode) {
         guard let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") else { return }
-        open([folder.url], withApplicationAt: terminal)
+        // Terminal runs executable files it is handed, so make sure this is still a folder, and
+        // pass its resolved path so a symlink swapped in since the listing can't redirect it.
+        let resolved = URL(fileURLWithPath: FileNode.canonicalPath(of: folder.url), isDirectory: true)
+        let values = try? resolved.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values?.isDirectory == true, values?.isSymbolicLink != true else {
+            NSSound.beep()
+            return
+        }
+        open([resolved], withApplicationAt: terminal)
     }
 
     // MARK: Keyboard
@@ -1367,7 +1378,7 @@ extension BrowserViewController: NSBrowserDelegate {
     }
 
     private func draggedURLs(_ info: NSDraggingInfo) -> [URL] {
-        info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        info.draggingPasteboard.existingFileURLs
     }
 
     private func dropTarget(row: Int, column: Int, operation: NSBrowser.DropOperation) -> FileNode? {

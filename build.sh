@@ -17,6 +17,9 @@ cd "$(dirname "$0")"
 APP_NAME="UltimateFinder"
 CONFIG="${CONFIG:-release}"
 APP="build/${APP_NAME}.app"
+# VERSION is the single source of truth; see CHANGELOG.md and scripts/bump-version.sh.
+VERSION="$(tr -d '[:space:]' < VERSION)"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION is not x.y.z: ${VERSION}" >&2; exit 1; }
 
 # UNIVERSAL=1 builds for Apple silicon and Intel and merges them (scripts/release.sh sets it).
 # Each architecture gets its own scratch path, because both would land in the same bin folder.
@@ -24,28 +27,31 @@ BINARIES=()
 if [[ "${UNIVERSAL:-}" == 1 ]]; then
     for arch in arm64 x86_64; do
         echo "▸ Compiling (${CONFIG}, ${arch})"
-        args=(-c "$CONFIG" --scratch-path ".build/${arch}" --triple "${arch}-apple-macosx13.0")
+        args=(-c "$CONFIG" --force-resolved-versions --scratch-path ".build/${arch}" --triple "${arch}-apple-macosx13.0")
         swift build "${args[@]}" --product "$APP_NAME"
         BINARIES+=("$(swift build "${args[@]}" --show-bin-path)/$APP_NAME")
     done
 else
     echo "▸ Compiling (${CONFIG})"
-    swift build -c "$CONFIG" --product "$APP_NAME"
-    BINARIES+=("$(swift build -c "$CONFIG" --show-bin-path)/$APP_NAME")
+    args=(-c "$CONFIG" --force-resolved-versions)
+    swift build "${args[@]}" --product "$APP_NAME"
+    BINARIES+=("$(swift build "${args[@]}" --show-bin-path)/$APP_NAME")
 fi
 
 echo "▸ Assembling ${APP}"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create -output "$APP/Contents/MacOS/$APP_NAME" "${BINARIES[@]}"
+# The linker adds the toolchain's back-deployment folder as an rpath. Nothing loads from it,
+# and a shipped app shouldn't look for libraries in a developer tools folder.
+otool -l "$APP/Contents/MacOS/$APP_NAME" | awk '$1 == "path" && $2 ~ "^/(Library|Applications)/" { print $2 }' | sort -u \
+    | while read -r rpath; do install_name_tool -delete_rpath "$rpath" "$APP/Contents/MacOS/$APP_NAME"; done
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # libwebp's BSD license asks that its notice travel with the binary.
 cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-# VERSION is the single source of truth; see CHANGELOG.md and scripts/bump-version.sh.
-VERSION="$(tr -d '[:space:]' < VERSION)"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -lint -s "$APP/Contents/Info.plist"

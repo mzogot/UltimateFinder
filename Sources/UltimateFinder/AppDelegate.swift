@@ -126,6 +126,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             warning.target = self
             warning.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
             menu.addItem(warning)
+        } else if hotKeyMode == .carbon, AccessibilityPermission.isTrusted {
+            // The grant lets an app control others; say so once the shortcut no longer needs it.
+            let unneeded = NSMenuItem(title: "Accessibility Access No Longer Needed…", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            unneeded.target = self
+            unneeded.toolTip = "The shortcut works without it now. You can turn UltimateFinder off under Privacy & Security › Accessibility."
+            menu.addItem(unneeded)
         }
         menu.addItem(.separator())
 
@@ -168,6 +174,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func explainAccessibility() {
         registerHotKey(explainIfBlocked: true)
+    }
+
+    @objc private func openAccessibilitySettings() {
+        AccessibilityPermission.openSystemSettings()
     }
 
     @objc private func selectHotKey(_ sender: NSMenuItem) {

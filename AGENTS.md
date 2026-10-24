@@ -29,7 +29,7 @@ swift build           # compile only, fastest check
   - `scripts/bump-version.sh major` for breaking changes,
   and rebuild. One bump per round of work, not per file edit.
 - Update README.md when behaviour or shortcuts change, and docs/DEVELOPMENT.md when the file layout changes.
-- Commit each round of work to git. Publish a version with `scripts/release.sh` (universal build → DMG → notarize → staple → tag → push → GitHub release, notes taken from the changelog). Notarization credentials are in the gitignored `.env.release.local`. Only release when the user asks.
+- Commit each round of work to git. Publish a version with `scripts/release.sh` (universal build → notarize + staple the app → DMG → notarize → staple → tag → push → GitHub release, notes taken from the changelog). Notarization credentials are in the keychain profile `ultimatefinder` (`xcrun notarytool store-credentials`), never on the command line. Only release when the user asks.
 - README screenshots in `docs/images/` were captured from a demo folder (`/Users/Shared/Studio`) with the user's defaults backed up and restored; never capture the user's real files or sidebar.
 
 ## Code conventions

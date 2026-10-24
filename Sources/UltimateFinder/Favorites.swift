@@ -121,6 +121,10 @@ enum Favorites {
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             try process.run()
+            // This runs on the main thread, so a hung sfltool must not freeze the visor.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+                if process.isRunning { process.terminate() }
+            }
             process.waitUntilExit()
         } catch {
             return nil

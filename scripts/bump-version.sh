@@ -10,7 +10,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 part="${1:-}"
-IFS=. read -r major minor patch < VERSION
+# Validated before any arithmetic: bash evaluates $((x)) recursively, so a crafted VERSION such
+# as "a[$(cmd)].0.0" would run cmd.
+current="$(tr -d '[:space:]' < VERSION)"
+[[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { echo "VERSION is not x.y.z: ${current}" >&2; exit 1; }
+major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[3]}"
 
 case "$part" in
     major) major=$((major + 1)); minor=0; patch=0 ;;

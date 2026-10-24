@@ -47,7 +47,7 @@ enum FileOperations {
                 let destination = availableDestination(for: source, in: folder)
                 do {
                     if move {
-                        try fm.moveItem(at: source, to: destination)
+                        try moveExclusively(source, to: destination)
                     } else {
                         try fm.copyItem(at: source, to: destination)
                     }
@@ -59,6 +59,24 @@ enum FileOperations {
             }
             DispatchQueue.main.async { completion(results, failure) }
         }
+    }
+
+    /// Moves or renames without ever replacing an item that appeared at `destination` after its
+    /// name was chosen: rename(2) alone would. FileManager handles the rest (other volumes,
+    /// file systems without RENAME_EXCL) and words the error when the name is taken.
+    static func moveExclusively(_ source: URL, to destination: URL) throws {
+        if renamex_np(source.path, destination.path, UInt32(RENAME_EXCL)) == 0 { return }
+        try FileManager.default.moveItem(at: source, to: destination)
+    }
+
+    /// Converted copies keep the original's download provenance, as Finder's copies do.
+    static func copyQuarantine(from source: URL, to destination: URL) {
+        let attribute = "com.apple.quarantine"
+        let size = getxattr(source.path, attribute, nil, 0, 0, XATTR_NOFOLLOW)
+        guard size > 0 else { return }
+        var value = [UInt8](repeating: 0, count: size)
+        guard getxattr(source.path, attribute, &value, size, 0, XATTR_NOFOLLOW) == size else { return }
+        setxattr(destination.path, attribute, value, size, 0, XATTR_NOFOLLOW)
     }
 
     /// "untitled folder" → "untitled folder 2", "Photo.png" → "Photo 2.png": the first name not taken in `folder`.
@@ -127,18 +145,34 @@ enum FileOperations {
     }
 
     /// The item's tags with their colors, read from the raw "Name\n6" entries Finder writes.
+    /// A symlink's own tags, not its target's: those are the ones `setLabel` writes.
     private static func userTags(of url: URL) -> [(name: String, color: Int)] {
         let attribute = "com.apple.metadata:_kMDItemUserTags"
-        let size = getxattr(url.path, attribute, nil, 0, 0, 0)
+        let size = getxattr(url.path, attribute, nil, 0, 0, XATTR_NOFOLLOW)
         guard size > 0 else { return [] }
         var data = Data(count: size)
-        let read = data.withUnsafeMutableBytes { getxattr(url.path, attribute, $0.baseAddress, size, 0, 0) }
+        let read = data.withUnsafeMutableBytes { getxattr(url.path, attribute, $0.baseAddress, size, 0, XATTR_NOFOLLOW) }
         guard read == size,
               let entries = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String]
         else { return [] }
         return entries.map { entry in
             let parts = entry.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
             return (String(parts.first ?? ""), parts.count > 1 ? Int(parts[1]) ?? 0 : 0)
+        }
+    }
+}
+
+extension NSPasteboard {
+    /// The file URLs on the pasteboard or in a drag, normalised. Any app can put URLs there, and
+    /// "folder/.." would otherwise be copied as a folder named ".. 2".
+    var existingFileURLs: [URL] {
+        let urls = readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        return urls.compactMap { url in
+            let clean = url.standardizedFileURL
+            guard clean.path != "/", ![".", ".."].contains(clean.lastPathComponent),
+                  (try? clean.checkResourceIsReachable()) == true
+            else { return nil }
+            return clean
         }
     }
 }

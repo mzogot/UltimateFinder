@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # Builds, notarizes and publishes the current VERSION as a GitHub release.
 #
-#   scripts/release.sh               build → DMG → notarize → staple → tag → push → GitHub release
+#   scripts/release.sh               build → notarize app → DMG → notarize → staple → tag → push → GitHub release
 #   scripts/release.sh --no-publish  stop after the notarized DMG (build/UltimateFinder-x.y.z.dmg)
 #
 # Before running: add the changelog entries, run scripts/bump-version.sh, commit.
 #
-# Notarization credentials come from .env.release.local (gitignored):
-#   APPLE_ID        the Apple ID of the developer account
-#   APPLE_PASSWORD  an app-specific password from account.apple.com (not the login password)
-#   APPLE_TEAM_ID   the 10-character team ID, as in the Developer ID certificate
-# Alternatively set NOTARY_PROFILE to a profile saved with `xcrun notarytool store-credentials`.
+# Notarization credentials live in the keychain, never on the command line, where any process
+# could read them with `ps`. Store them once (it asks for an app-specific password from
+# account.apple.com):
+#   xcrun notarytool store-credentials ultimatefinder --apple-id you@example.com --team-id 854T64H39D
+# NOTARY_PROFILE picks another profile name.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 APP_NAME="UltimateFinder"
 VERSION="$(tr -d '[:space:]' < VERSION)"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "✗ VERSION is not x.y.z: ${VERSION}" >&2; exit 1; }
 TAG="v${VERSION}"
 APP="build/${APP_NAME}.app"
 DMG="build/${APP_NAME}-${VERSION}.dmg"
@@ -44,21 +45,25 @@ SIGN_IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/de
     | sed -nE 's/.*"(Developer ID Application: [^"]+)".*/\1/p' | head -1)}"
 [[ -n "$SIGN_IDENTITY" ]] || fail "no Developer ID Application certificate in the keychain"
 
-if [[ -z "${NOTARY_PROFILE:-}" ]]; then
-    [[ -f .env.release.local ]] || fail "missing .env.release.local (or set NOTARY_PROFILE)"
-    set -a; . ./.env.release.local; set +a
-    [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]] \
-        || fail "fill APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID in .env.release.local"
-    NOTARY_AUTH=(--apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID")
-else
-    NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE")
-fi
+NOTARY_PROFILE="${NOTARY_PROFILE:-ultimatefinder}"
+NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE")
+xcrun notarytool history "${NOTARY_AUTH[@]}" >/dev/null 2>&1 \
+    || fail "no working notarytool keychain profile '${NOTARY_PROFILE}'; run: xcrun notarytool store-credentials ${NOTARY_PROFILE} --apple-id <Apple ID> --team-id <team ID>"
 
 # MARK: Build and package
 
 SIGN_IDENTITY="$SIGN_IDENTITY" TIMESTAMP=1 UNIVERSAL=1 ./build.sh
 [[ "$(lipo -archs "$APP/Contents/MacOS/$APP_NAME")" == *x86_64*arm64* ]] || fail "not a universal binary"
 codesign --verify --deep --strict "$APP"
+
+# The app gets its own ticket too, so it still opens offline after being copied out of the DMG.
+echo "▸ Notarizing ${APP} (usually a few minutes)"
+ZIP="build/${APP_NAME}-${VERSION}.zip"
+rm -f "$ZIP"
+ditto -c -k --keepParent "$APP" "$ZIP"
+xcrun notarytool submit "$ZIP" "${NOTARY_AUTH[@]}" --wait
+rm -f "$ZIP"
+xcrun stapler staple "$APP"
 
 echo "▸ Packaging ${DMG}"
 STAGE="build/dmg"
@@ -72,7 +77,7 @@ codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
 
 # MARK: Notarize
 
-echo "▸ Notarizing (usually a few minutes)"
+echo "▸ Notarizing ${DMG}"
 xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait
 xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature -v "$DMG"

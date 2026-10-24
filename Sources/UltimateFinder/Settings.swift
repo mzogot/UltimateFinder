@@ -105,16 +105,21 @@ enum Settings {
     static func tabs(of pane: Pane) -> (tabs: [BrowserTab], active: Int) {
         if let data = defaults.data(forKey: pane.key("tabs")),
            let saved = try? JSONDecoder().decode([BrowserTab].self, from: data) {
-            let existing = saved.filter { FileManager.default.fileExists(atPath: $0.root.path) }
+            let existing = saved.filter { $0.root.isFileURL && isFolder($0.root.path) }
             if !existing.isEmpty {
                 return (existing, min(max(defaults.integer(forKey: pane.key("activeTab")), 0), existing.count - 1))
             }
         }
         var root = FileManager.default.homeDirectoryForCurrentUser
-        if pane == .left, let path = defaults.string(forKey: "rootPath"), FileManager.default.fileExists(atPath: path) {
+        if pane == .left, let path = defaults.string(forKey: "rootPath"), isFolder(path) {
             root = URL(fileURLWithPath: path, isDirectory: true)
         }
         return ([BrowserTab(root: root, selection: [])], 0)
+    }
+
+    private static func isFolder(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     static func setTabs(_ tabs: [BrowserTab], active: Int, of pane: Pane) {
