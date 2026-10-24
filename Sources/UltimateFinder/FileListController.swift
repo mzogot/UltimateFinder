@@ -137,8 +137,7 @@ final class FileListController: NSObject, NSOutlineViewDataSource, NSOutlineView
     /// Redraws the name cells of `nodes`, e.g. once their icon previews have loaded.
     func reloadIcons(of nodes: [FileNode]) {
         let rows = IndexSet(nodes.map { outlineView.row(forItem: $0) }.filter { $0 >= 0 })
-        guard !rows.isEmpty, let column = outlineView.tableColumns.firstIndex(where: { $0 === outlineView.outlineTableColumn })
-        else { return }
+        guard !rows.isEmpty, let column = nameColumnIndex else { return }
         outlineView.reloadData(forRowIndexes: rows, columnIndexes: IndexSet(integer: column))
     }
 
@@ -270,6 +269,33 @@ final class FileListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             let selected = selectedNodes
             host?.fileList(open: selected.contains(file) ? selected.filter { !$0.isDirectory } : [file])
         }
+    }
+
+    // MARK: Renaming
+
+    /// The name label of `node`'s row, scrolled into view, for laying the rename field over it.
+    func nameLabel(of node: FileNode) -> NSTextField? {
+        let row = outlineView.row(forItem: node)
+        guard row >= 0, let column = nameColumnIndex else { return nil }
+        outlineView.scrollRowToVisible(row)
+        return (outlineView.view(atColumn: column, row: row, makeIfNecessary: true) as? NSTableCellView)?.textField
+    }
+
+    /// The item whose name (the text, not the icon or the space after it) is under `locationInWindow`.
+    func node(withNameAt locationInWindow: NSPoint) -> FileNode? {
+        let point = outlineView.convert(locationInWindow, from: nil)
+        guard outlineView.visibleRect.contains(point) else { return nil }
+        let row = outlineView.row(at: point)
+        guard row >= 0, let column = nameColumnIndex, outlineView.column(at: point) == column,
+              let label = (outlineView.view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView)?.textField
+        else { return nil }
+        let x = label.convert(point, from: outlineView).x
+        guard x >= 0, x <= min(label.attributedStringValue.size().width + 4, label.bounds.width) else { return nil }
+        return outlineView.item(atRow: row) as? FileNode
+    }
+
+    private var nameColumnIndex: Int? {
+        outlineView.tableColumns.firstIndex { $0 === outlineView.outlineTableColumn }
     }
 
     // MARK: Drag & drop

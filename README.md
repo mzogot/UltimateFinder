@@ -114,7 +114,7 @@ UltimateFinder lives in the menu bar, with no Dock icon. The menu-bar icon lets 
 | Open | double-click, <kbd>⌘</kbd> <kbd>O</kbd> or <kbd>⌘</kbd> <kbd>↓</kbd> |
 | Back / forward | <kbd>⌘</kbd> <kbd>[</kbd> / <kbd>⌘</kbd> <kbd>]</kbd>, mouse buttons 4 / 5, or swipe |
 | Parent folder | <kbd>⌘</kbd> <kbd>↑</kbd> |
-| Rename | <kbd>Return</kbd> |
+| Rename | <kbd>Return</kbd>, or click the name of the selected item |
 | New folder | <kbd>⇧</kbd> <kbd>⌘</kbd> <kbd>N</kbd> |
 | Cut / copy / paste | <kbd>⌘</kbd> <kbd>X</kbd> / <kbd>⌘</kbd> <kbd>C</kbd> / <kbd>⌘</kbd> <kbd>V</kbd> |
 | Move here | <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>V</kbd> |

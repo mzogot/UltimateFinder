@@ -93,6 +93,7 @@ Sources/UltimateFinder/
   PreviewViewController.swift    preview column (thumbnail + Kind/Size/Dates)
   FileNode.swift                 cached directory model, icon previews, color labels, shared sort order
   FileListController.swift       list view (NSOutlineView, sortable columns)
+  RenameField.swift              inline rename field laid over an item's name
   DirectoryWatcher.swift         kqueue watcher for the visible columns
   FileOperations.swift           Finder-style copy/move/unique names, new folder/text file, color-label tags
   ImageConverter.swift           Convert Image: JPEG/PNG via ImageIO, WebP via libwebp

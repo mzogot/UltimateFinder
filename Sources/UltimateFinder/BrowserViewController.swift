@@ -27,8 +27,17 @@ final class BrowserViewController: NSViewController {
     private var tabBarHeight: NSLayoutConstraint!
     private let statusLabel = NSTextField(labelWithString: "")
     private lazy var watcher = DirectoryWatcher { [weak self] paths in
-        self?.refreshVisibleColumns(onlyIn: paths)
+        guard let self else { return }
+        // Reloading a column would pull the rename field out from under the user; catch up afterwards.
+        if self.renameField != nil {
+            self.needsRefreshAfterRename = true
+            return
+        }
+        self.refreshVisibleColumns(onlyIn: paths)
     }
+    private var renameField: RenameField?
+    private var renameTimer: Timer?
+    private var needsRefreshAfterRename = false
 
     // Tabs share one NSBrowser: switching saves the current root + selection and loads the other's.
     private var tabs: [BrowserTab]
@@ -310,6 +319,8 @@ final class BrowserViewController: NSViewController {
     }
 
     func visorDidHide() {
+        cancelPendingRename()
+        renameField?.commit()
         isVisorShown = false
         watcher.stop()
         saveTabs()
@@ -881,7 +892,75 @@ final class BrowserViewController: NSViewController {
         }
     }
 
+    // MARK: Renaming
+
+    /// Renames in place, with a field over the item's name as in Finder; an alert stands in when
+    /// the row can't be shown.
     private func rename(_ node: FileNode) {
+        cancelPendingRename()
+        renameField?.commit()
+        guard view.window?.isVisible == true, let field = makeRenameField(for: node) else {
+            renameWithAlert(node)
+            return
+        }
+        renameField = field
+        field.onEnd = { [weak self, weak field] newName in
+            guard let self, let field else { return }
+            self.renameField = nil
+            if self.view.window?.firstResponder === field.currentEditor() {
+                self.view.window?.makeFirstResponder(self.primaryView)
+            }
+            field.removeFromSuperview()
+            if let newName {
+                self.applyRename(of: node, to: newName)
+            }
+            if self.needsRefreshAfterRename {
+                self.needsRefreshAfterRename = false
+                self.refreshVisibleColumns()
+            }
+        }
+        field.beginEditing(selecting: Self.renameSelection(in: field.stringValue, isDirectory: node.isDirectory))
+    }
+
+    /// Lays a rename field over `node`'s name in the list or column view; nil if it isn't showing.
+    private func makeRenameField(for node: FileNode) -> RenameField? {
+        let name = node.url.lastPathComponent
+        if isListMode {
+            // In the outline view rather than the cell, which gets reused when rows reload.
+            let host = fileList.outlineView
+            guard let label = fileList.nameLabel(of: node) else { return nil }
+            let labelFrame = host.convert(label.frame, from: label.superview)
+            let field = RenameField(name: name, font: label.font ?? .systemFont(ofSize: NSFont.systemFontSize),
+                                    textFrame: labelFrame.insetBy(dx: 2, dy: 0), maxX: labelFrame.maxX)
+            host.addSubview(field)
+            return field
+        }
+
+        guard let path = browser.selectionIndexPaths.first(where: { browser.item(at: $0) as? FileNode === node }),
+              let row = path.last, let superview = browser.superview
+        else { return nil }
+        let column = path.count - 1
+        browser.scrollColumnToVisible(column)
+        browser.scrollRowToVisible(row, inColumn: column)
+        let rowFrame = browser.frame(ofRow: row, inColumn: column)
+        guard !rowFrame.isEmpty else { return nil }
+
+        // Sit in the column's own view so the field scrolls with the row.
+        let center = superview.convert(NSPoint(x: rowFrame.midX, y: rowFrame.midY), from: browser)
+        let host = browser.hitTest(center) ?? browser
+        let textFrame = host.convert(browserNameFrame(row: row, column: column, node: node), from: browser)
+        let field = RenameField(name: name, font: browser.font ?? .systemFont(ofSize: NSFont.systemFontSize),
+                                textFrame: textFrame, maxX: host.convert(rowFrame, from: browser).maxX - 2)
+        host.addSubview(field)
+        return field
+    }
+
+    /// Finder selects the name without its extension.
+    private static func renameSelection(in name: String, isDirectory: Bool) -> NSRange {
+        NSRange(location: 0, length: isDirectory ? name.utf16.count : (name as NSString).deletingPathExtension.utf16.count)
+    }
+
+    private func renameWithAlert(_ node: FileNode) {
         let name = node.url.lastPathComponent
         let field = NSTextField(string: name)
         field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
@@ -894,23 +973,81 @@ final class BrowserViewController: NSViewController {
 
         present(alert) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else { return }
-            let newName = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !newName.isEmpty, newName != name else { return }
-            guard !newName.contains("/") else { NSSound.beep(); return }
-
-            let destination = node.url.deletingLastPathComponent().appendingPathComponent(newName)
-            do {
-                try FileManager.default.moveItem(at: node.url, to: destination)
-                self.select([destination])
-            } catch {
-                self.showError(error)
-            }
+            self.applyRename(of: node, to: field.stringValue)
         }
 
-        // Select the name without its extension, like Finder.
         alert.window.makeFirstResponder(field)
-        let selectionLength = node.isDirectory ? name.utf16.count : (name as NSString).deletingPathExtension.utf16.count
-        field.currentEditor()?.selectedRange = NSRange(location: 0, length: selectionLength)
+        field.currentEditor()?.selectedRange = Self.renameSelection(in: name, isDirectory: node.isDirectory)
+    }
+
+    private func applyRename(of node: FileNode, to typedName: String) {
+        let name = node.url.lastPathComponent
+        let newName = typedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty, newName != name else { return }
+        guard !newName.contains("/") else { NSSound.beep(); return }
+
+        let destination = node.url.deletingLastPathComponent().appendingPathComponent(newName)
+        do {
+            try FileManager.default.moveItem(at: node.url, to: destination)
+            select([destination])
+        } catch {
+            showError(error)
+        }
+    }
+
+    /// As in Finder, a click on the name of the one selected item starts renaming it, once the
+    /// double-click interval has passed without a second click or a drag. Any click outside the
+    /// rename field ends renaming.
+    private func handleMouseForRename(_ event: NSEvent) {
+        cancelPendingRename()
+        if let field = renameField, let host = field.superview,
+           event.window !== field.window || !field.frame.contains(host.convert(event.locationInWindow, from: nil)) {
+            field.commit()
+        }
+        guard event.type == .leftMouseDown, event.clickCount == 1, event.modifierFlags.userModifiers.isEmpty,
+              event.window === view.window, !view.isHiddenOrHasHiddenAncestor, renameField == nil,
+              let node = node(withNameAt: event.locationInWindow),
+              selectedNodes.count == 1, selectedNodes.first === node
+        else { return }
+
+        let start = NSEvent.mouseLocation
+        renameTimer = Timer.scheduledTimer(withTimeInterval: NSEvent.doubleClickInterval, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.renameTimer = nil
+            let end = NSEvent.mouseLocation
+            guard NSEvent.pressedMouseButtons & 1 == 0, abs(end.x - start.x) < 4, abs(end.y - start.y) < 4,
+                  self.view.window?.isKeyWindow == true, self.selectedNodes.count == 1, self.selectedNodes.first === node
+            else { return }
+            self.rename(node)
+        }
+    }
+
+    private func cancelPendingRename() {
+        renameTimer?.invalidate()
+        renameTimer = nil
+    }
+
+    /// The item whose name is under `locationInWindow`, in the current view.
+    private func node(withNameAt locationInWindow: NSPoint) -> FileNode? {
+        if isListMode { return fileList.node(withNameAt: locationInWindow) }
+        let point = browser.convert(locationInWindow, from: nil)
+        var row = -1
+        var column = -1
+        guard browser.bounds.contains(point), browser.getRow(&row, column: &column, for: point),
+              let node = browser.item(atRow: row, inColumn: column) as? FileNode,
+              browserNameFrame(row: row, column: column, node: node).insetBy(dx: -2, dy: 0).contains(point)
+        else { return nil }
+        return node
+    }
+
+    /// Where a browser row draws its name, in browser coordinates: the title starts at the row's
+    /// leading edge with a 16pt icon and two spaces.
+    private func browserNameFrame(row: Int, column: Int, node: FileNode) -> NSRect {
+        let rowFrame = browser.frame(ofRow: row, inColumn: column)
+        let font = browser.font ?? .systemFont(ofSize: NSFont.systemFontSize)
+        let start = rowFrame.minX + 4 + 16 + ("  " as NSString).size(withAttributes: [.font: font]).width
+        let width = (node.name as NSString).size(withAttributes: [.font: font]).width
+        return NSRect(x: start, y: rowFrame.minY, width: max(min(width, rowFrame.maxX - start), 0), height: rowFrame.height)
     }
 
     /// Shows alerts as sheets on the visor, which keeps keyboard focus even if macOS declines
@@ -1183,10 +1320,7 @@ extension BrowserViewController: NSBrowserDelegate {
         guard browser.getRow(&row, column: &hitColumn, for: point), hitColumn == column,
               let node = browser.item(atRow: row, inColumn: column) as? FileNode
         else { return false }
-        // The title is drawn from the row's leading edge: a 16pt icon, two spaces, then the name.
-        let font = browser.font ?? .systemFont(ofSize: NSFont.systemFontSize)
-        let textWidth = ("  " + node.name as NSString).size(withAttributes: [.font: font]).width
-        return point.x <= browser.frame(ofRow: row, inColumn: column).minX + 4 + 16 + textWidth + 6
+        return point.x <= browserNameFrame(row: row, column: column, node: node).maxX + 6
     }
 
     func browser(_ browser: NSBrowser, writeRowsWith rowIndexes: IndexSet, inColumn column: Int, to pasteboard: NSPasteboard) -> Bool {
@@ -1640,9 +1774,12 @@ extension BrowserViewController {
         navigationControl.setContentHuggingPriority(.required, for: .horizontal)
 
         // Mouse back/forward buttons (buttons 4 and 5) and trackpad / Magic Mouse page swipes,
-        // for the pane under the mouse.
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseUp, .swipe]) { [weak self] event in
-            guard let self, event.window === self.view.window, !self.view.isHiddenOrHasHiddenAncestor,
+        // for the pane under the mouse. Clicks also start and end inline renaming.
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseUp, .swipe]) { [weak self] event in
+            guard let self else { return event }
+            self.handleMouseForRename(event)
+            guard event.type == .otherMouseUp || event.type == .swipe,
+                  event.window === self.view.window, !self.view.isHiddenOrHasHiddenAncestor,
                   self.view.bounds.contains(self.view.convert(event.locationInWindow, from: nil))
             else { return event }
             switch event.type {

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
+        setUpMainMenu()
         visor.prewarm()
         registerHotKey(explainIfBlocked: true)
 
@@ -74,6 +75,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func stopPollingTrust() {
         trustPollTimer?.invalidate()
         trustPollTimer = nil
+    }
+
+    // MARK: Main menu
+
+    /// The menu bar never shows for a menu-bar agent, but text fields get ⌘X / ⌘C / ⌘V / ⌘A / ⌘Z
+    /// only from the main menu's key equivalents, so it still needs an Edit menu.
+    private func setUpMainMenu() {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+            .keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let mainMenu = NSMenu()
+        mainMenu.addItem(NSMenuItem())  // the application menu's slot
+        let editItem = NSMenuItem()
+        editItem.submenu = edit
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
     }
 
     // MARK: Status item

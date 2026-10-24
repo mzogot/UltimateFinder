@@ -6,6 +6,14 @@ Add entries under **Unreleased** as you work, then run `scripts/bump-version.sh 
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-10-24
+
+### Changed
+- Renaming happens in place, as in Finder: click the name of an item that's already selected, press Return, or choose *Rename* from the right-click menu, and the name turns into a text field right in the list or column. Return or clicking elsewhere keeps the new name, Esc cancels. New folders and text files open the same way. The rename dialog is gone.
+
+### Fixed
+- Cut, copy, paste, select all and undo (⌘X / ⌘C / ⌘V / ⌘A / ⌘Z) now work while typing a name, and in every other text field in the app. ⌘A also selects all items in the browser.
+
 ## [1.10.0] — 2026-10-24
 
 ### Added
