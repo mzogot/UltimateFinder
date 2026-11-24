@@ -6,6 +6,16 @@ Add entries under **Unreleased** as you work, then run `scripts/bump-version.sh 
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-11-24
+
+### Added
+- Icon view (⌘1, or the grid button in the toolbar): large icons, with previews of images, PDFs and movies, and the names underneath. It works like the other views: drag and drop, right-click menu, Quick Look, renaming, color labels and type-to-select.
+- *Get Info* in the right-click menu, and ⌘I, open Finder's Info window for the selected items.
+- Drag the visor's bottom edge to make it shorter or taller, for example to uncover a drop target underneath. The height is remembered; double-click the edge to go back to the default.
+
+### Fixed
+- While renaming, the old name no longer shows through the text field behind the new one.
+
 ## [1.11.1] — 2026-10-24
 
 ### Security

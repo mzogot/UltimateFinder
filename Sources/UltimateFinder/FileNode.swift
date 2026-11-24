@@ -30,9 +30,9 @@ final class FileNode: NSObject {
     private(set) var labelNumber: Int
 
     private var cachedChildren: [FileNode]?
-    private var cachedIcon: NSImage?
+    private var cachedIcons: [CGFloat: NSImage] = [:]
     private var cachedDisplayTitle: NSAttributedString?
-    private var didRequestThumbnail = false
+    private var requestedThumbnails: Set<CGFloat> = []
 
     /// Posted with the node as object when its icon preview has loaded and replaced the type icon.
     static let iconDidChange = Notification.Name("FileNodeIconDidChange")
@@ -74,9 +74,9 @@ final class FileNode: NSObject {
         if changed {
             cachedKind = nil
             // The contents changed, so the icon preview may have too.
-            cachedIcon = nil
+            cachedIcons = [:]
             cachedDisplayTitle = nil
-            didRequestThumbnail = false
+            requestedThumbnails = []
         }
         return changed || labelChanged
     }
@@ -116,20 +116,23 @@ final class FileNode: NSObject {
     /// The row icon. Like Finder's "Show icon preview", files whose contents Quick Look can draw
     /// (images, PDFs, movies, documents…) get a thumbnail; it loads in the background, and the
     /// type icon stands in until `iconDidChange` is posted.
-    var icon: NSImage {
-        if let cachedIcon { return cachedIcon }
+    var icon: NSImage { icon(side: 16) }
+
+    /// The icon at `side` points square (16 for rows, larger for icon view), with the same
+    /// thumbnail behaviour as `icon`.
+    func icon(side: CGFloat) -> NSImage {
+        if let cached = cachedIcons[side] { return cached }
         // NSWorkspace may hand back a shared instance, so resize a copy.
         let image = NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
-        image.size = NSSize(width: 16, height: 16)
-        cachedIcon = image
-        loadThumbnail()
+        image.size = NSSize(width: side, height: side)
+        cachedIcons[side] = image
+        loadThumbnail(side: side)
         return image
     }
 
-    private func loadThumbnail() {
-        guard !isDirectory, !didRequestThumbnail else { return }
-        didRequestThumbnail = true
-        let side: CGFloat = 16
+    private func loadThumbnail(side: CGFloat) {
+        guard !isDirectory, !requestedThumbnails.contains(side) else { return }
+        requestedThumbnails.insert(side)
         let scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
         let request = QLThumbnailGenerator.Request(
             fileAt: url, size: CGSize(width: side, height: side), scale: scale, representationTypes: .thumbnail
@@ -138,9 +141,9 @@ final class FileNode: NSObject {
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { [weak self] representation, _ in
             guard let thumbnail = representation?.nsImage else { return }
             DispatchQueue.main.async {
-                guard let self, self.didRequestThumbnail else { return }
+                guard let self, self.requestedThumbnails.contains(side) else { return }
                 // Thumbnails keep their aspect ratio; centre them in a square so rows stay aligned.
-                self.cachedIcon = NSImage(size: NSSize(width: side, height: side), flipped: false) { bounds in
+                self.cachedIcons[side] = NSImage(size: NSSize(width: side, height: side), flipped: false) { bounds in
                     let size = thumbnail.size
                     let fit = min(bounds.width / max(size.width, 1), bounds.height / max(size.height, 1), 1)
                     let drawn = NSSize(width: size.width * fit, height: size.height * fit)
@@ -148,7 +151,7 @@ final class FileNode: NSObject {
                                               width: drawn.width, height: drawn.height))
                     return true
                 }
-                self.cachedDisplayTitle = nil
+                if side == 16 { self.cachedDisplayTitle = nil }
                 NotificationCenter.default.post(name: Self.iconDidChange, object: self)
             }
         }

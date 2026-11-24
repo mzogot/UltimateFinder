@@ -31,6 +31,19 @@ final class VisorController: NSObject {
             content.bottomAnchor.constraint(equalTo: background.bottomAnchor),
         ])
 
+        let resizeHandle = VisorResizeHandle()
+        resizeHandle.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(resizeHandle)
+        NSLayoutConstraint.activate([
+            resizeHandle.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            resizeHandle.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            resizeHandle.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+            resizeHandle.heightAnchor.constraint(equalToConstant: 5),
+        ])
+        resizeHandle.onDrag = { [weak self] bottom in self?.resize(toBottom: bottom) }
+        resizeHandle.onEnd = { [weak self] in self?.saveHeight() }
+        resizeHandle.onReset = { [weak self] in self?.resetHeight() }
+
         panel.quickLookController = self
         panel.onCancel = { [weak self] in self?.hide() }
         contentController.onOpenedItems = { [weak self] in self?.hide() }
@@ -133,9 +146,16 @@ final class VisorController: NSObject {
 
     // MARK: Geometry
 
+    private static let minimumHeight: CGFloat = 220
+
     private func shownFrame(on screen: NSScreen) -> NSRect {
-        let height = (screen.frame.height * Settings.heightFraction).rounded()
-        let top = screen.visibleFrame.maxY // directly below the menu bar
+        frame(on: screen, height: screen.frame.height * Settings.heightFraction)
+    }
+
+    /// The visor's frame directly below the menu bar, at `height` clamped to what fits on screen.
+    private func frame(on screen: NSScreen, height: CGFloat) -> NSRect {
+        let top = screen.visibleFrame.maxY
+        let height = min(max(height, Self.minimumHeight), screen.visibleFrame.height).rounded()
         return NSRect(x: screen.frame.minX, y: top - height, width: screen.frame.width, height: height)
     }
 
@@ -143,6 +163,27 @@ final class VisorController: NSObject {
         var frame = shownFrame(on: screen)
         frame.origin.y = screen.frame.maxY
         return frame
+    }
+
+    // MARK: Resizing
+
+    private func resize(toBottom bottom: CGFloat) {
+        guard isShown, let screen = currentScreen else { return }
+        panel.setFrame(frame(on: screen, height: screen.visibleFrame.maxY - bottom), display: true)
+    }
+
+    private func saveHeight() {
+        guard isShown, let screen = currentScreen else { return }
+        Settings.heightFraction = panel.frame.height / screen.frame.height
+    }
+
+    private func resetHeight() {
+        guard isShown, let screen = currentScreen else { return }
+        Settings.heightFraction = Settings.defaultHeightFraction
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = showDuration
+            panel.animator().setFrame(shownFrame(on: screen), display: true)
+        }
     }
 
     static func screenWithMouse() -> NSScreen {

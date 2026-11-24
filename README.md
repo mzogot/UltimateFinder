@@ -65,6 +65,10 @@ UltimateFinder keeps the old rule, in list view and column view alike. Drag besi
 
 Finder's column view, with an icon preview for each image, PDF and movie, and a preview column with the file's details. Columns update live when files change, and their widths are remembered.
 
+### Icon, list and column views
+
+Switch with the buttons in the toolbar or <kbd>⌘</kbd> <kbd>1</kbd> / <kbd>⌘</kbd> <kbd>2</kbd> / <kbd>⌘</kbd> <kbd>3</kbd>, as in Finder. Icon view shows large icons and previews in a grid.
+
 ### List view and color labels
 
 <img src="docs/images/list.png" alt="List view with Name, Date Modified, Size and Kind columns; folder rows tinted purple, blue, green and orange">
@@ -122,9 +126,10 @@ UltimateFinder lives in the menu bar, with no Dock icon. The menu-bar icon lets 
 | Duplicate | <kbd>⌘</kbd> <kbd>D</kbd> |
 | Move to Trash | <kbd>⌘</kbd> <kbd>⌫</kbd> |
 | Reveal in Finder | <kbd>⌘</kbd> <kbd>R</kbd> |
+| Get Info | <kbd>⌘</kbd> <kbd>I</kbd> |
 | Show hidden files | <kbd>⇧</kbd> <kbd>⌘</kbd> <kbd>.</kbd> |
 | Split view | <kbd>⌘</kbd> <kbd>U</kbd> |
-| List / column view | <kbd>⌘</kbd> <kbd>2</kbd> / <kbd>⌘</kbd> <kbd>3</kbd> |
+| Icon / list / column view | <kbd>⌘</kbd> <kbd>1</kbd> / <kbd>⌘</kbd> <kbd>2</kbd> / <kbd>⌘</kbd> <kbd>3</kbd> |
 | New tab / close tab | <kbd>⌘</kbd> <kbd>T</kbd> / <kbd>⌘</kbd> <kbd>W</kbd> |
 | Next / previous tab | <kbd>⌃</kbd> <kbd>Tab</kbd> / <kbd>⌃</kbd> <kbd>⇧</kbd> <kbd>Tab</kbd>, or <kbd>⇧</kbd> <kbd>⌘</kbd> <kbd>]</kbd> / <kbd>⇧</kbd> <kbd>⌘</kbd> <kbd>[</kbd> |
 | Open folder in new tab | <kbd>⌘</kbd>-double-click |
@@ -135,19 +140,21 @@ On a German keyboard, <kbd>⌘</kbd> <kbd>[</kbd> / <kbd>⌘</kbd> <kbd>]</kbd> 
 <details>
 <summary><b>Full feature reference</b></summary>
 
-- **Right-click** an item or empty space for: Open, Open in New Tab, Open With, Quick Look, Show in Finder, Cut, Copy, Copy Name, Copy Name Without Extension, Copy Path, Add to Sidebar, Duplicate, Convert Image, Rename, Move to Trash, color labels, Share, New Folder, New Text File, Paste and Open in Terminal.
-- **Split view** shows two browsers side by side, 50/50. Each side has its own sidebar, tabs, history and list/column view (all remembered); sort order, hidden files and favorites are shared. Keys act on the side you last clicked in. Drag the divider to resize; the proportion is kept across displays.
+- **Right-click** an item or empty space for: Open, Open in New Tab, Open With, Quick Look, Get Info, Show in Finder, Cut, Copy, Copy Name, Copy Name Without Extension, Copy Path, Add to Sidebar, Duplicate, Convert Image, Rename, Move to Trash, color labels, Share, New Folder, New Text File, Paste and Open in Terminal.
+- **Split view** shows two browsers side by side, 50/50. Each side has its own sidebar, tabs, history and icon/list/column view (all remembered); sort order, hidden files and favorites are shared. Keys act on the side you last clicked in. Drag the divider to resize; the proportion is kept across displays.
 - **Cut** marks items to be moved: the next Paste moves them instead of copying, even into the other side of split view. Copying anything else first cancels the cut. Holding <kbd>⌥</kbd> in the right-click menu turns *Paste* into *Move Items Here*.
 - **New Text File** creates a blank `untitled.rtf` (opens in TextEdit) and asks for its name, like New Folder.
 - **Convert Image** (shown when only images are selected) saves a JPEG, PNG or WebP copy next to each original; existing files are never overwritten (`photo 2.png`). Rotation from the camera is applied, EXIF/GPS metadata is kept for JPEG and PNG, and transparency turns white in JPEG. WebP is lossy (quality 90) from JPEG/HEIC photos and lossless otherwise.
 - **List view** works like Finder's: click a header to sort by it (click again to reverse), drag headers to reorder or resize them, use the disclosure triangles (or <kbd>→</kbd> / <kbd>←</kbd>) to expand folders in place. The sort order is shared with column view, where the sort button picks it.
+- **Icon view** (<kbd>⌘</kbd> <kbd>1</kbd>) shows large icons, with previews of images, PDFs and movies, in a grid sorted like the other views. Color labels tint the name. Type the start of a name to jump to it.
+- **Get Info** (<kbd>⌘</kbd> <kbd>I</kbd>) opens Finder's own Info window for each selected item; the visor slides away so the window is in view.
 - **Back / forward** history is kept per tab. A step is recorded whenever the folder you're looking into changes, and going back also restores what was selected there.
 - **Tabs** appear once you have two or more. Each is titled after the folder you're looking into; middle-click closes one. Tabs and their selection are restored when the visor reopens and after relaunching.
 - **Favorites** in the sidebar: drag folders *between* rows to add them and drag favorites to reorder; drop files *onto* a favorite to move or copy them there; right-click for *Open in New Tab*, *Show in Finder* or *Remove from Sidebar* (or press <kbd>Delete</kbd>); right-click empty sidebar space for *Import Finder Favorites…* or *Restore Default Favorites*.
 - **Selecting with the mouse:** pressing on an item's icon or name and dragging drags the item; pressing beside the name and dragging selects every row the mouse passes over.
 - **Icon previews** load in the background; the file-type icon shows until each thumbnail is ready.
 - **Color labels** are stored as Finder's color tags (Red, Orange, Yellow, Green, Blue, Purple, Gray). Other tags on the item are kept. Click the current color again to remove it.
-- **Placement:** the visor spans the full width of the display with the mouse and the top 60% of its height, just under the menu bar.
+- **Placement:** the visor spans the full width of the display with the mouse, just under the menu bar, and starts at 60% of its height. Drag its bottom edge to make it shorter or taller (to uncover something underneath, say); the height is remembered. Double-click the edge to go back to 60%.
 - **Launching** the app again while it runs (from Spotlight, say) toggles the visor. `open -a UltimateFinder --args --show` shows it on launch.
 
 </details>

@@ -12,12 +12,14 @@ protocol FileListHost: AnyObject {
 
 /// Finder's list view: Name / Date Modified / Size / Kind, sortable by clicking the headers,
 /// with disclosure triangles to expand folders in place.
-final class FileListController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
+final class FileListController: NSObject, FolderView, NSOutlineViewDataSource, NSOutlineViewDelegate {
     let scrollView = NSScrollView()
     let outlineView: NSOutlineView = FileOutlineView()
     weak var host: FileListHost?
     private(set) var folder: FileNode?
     private var isApplyingSort = false
+
+    var documentView: NSView { outlineView }
 
     private enum Column: String, CaseIterable {
         case name, dateModified, size, kind
@@ -292,6 +294,21 @@ final class FileListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         let x = label.convert(point, from: outlineView).x
         guard x >= 0, x <= min(label.attributedStringValue.size().width + 4, label.bounds.width) else { return nil }
         return outlineView.item(atRow: row) as? FileNode
+    }
+
+    func iconFrameInWindow(of url: URL) -> NSRect? {
+        guard let row = row(for: url) else { return nil }
+        let cell = outlineView.frameOfCell(atColumn: nameColumnIndex ?? 0, row: row)
+        return outlineView.convert(NSRect(x: cell.minX + 2, y: cell.midY - 8, width: 16, height: 16), to: nil)
+    }
+
+    /// Right-clicking an unselected row selects it first, like Finder.
+    func menuTargets() -> [FileNode] {
+        let row = outlineView.clickedRow
+        guard row >= 0, let clicked = outlineView.item(atRow: row) as? FileNode else { return [] }
+        if selectedNodes.contains(where: { $0 === clicked }) { return selectedNodes }
+        outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        return [clicked]
     }
 
     private var nameColumnIndex: Int? {

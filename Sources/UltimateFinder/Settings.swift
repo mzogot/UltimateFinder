@@ -46,8 +46,16 @@ extension NSEvent.ModifierFlags {
 enum Settings {
     private static let defaults = UserDefaults.standard
 
-    /// Fraction of the screen height the visor covers.
-    static let heightFraction: CGFloat = 0.6
+    static let defaultHeightFraction: CGFloat = 0.6
+
+    /// Fraction of the screen height the visor covers; set by dragging its bottom edge.
+    static var heightFraction: CGFloat {
+        get {
+            let saved = defaults.double(forKey: "heightFraction")
+            return saved > 0 ? min(max(CGFloat(saved), 0.15), 1) : defaultHeightFraction
+        }
+        set { defaults.set(Double(newValue), forKey: "heightFraction") }
+    }
 
     static var hotKey: HotKeyPreset {
         get { .preset(id: defaults.string(forKey: "hotKey")) }
@@ -75,7 +83,7 @@ enum Settings {
     }
 
     enum ViewMode: String {
-        case columns, list
+        case icons, list, columns
     }
 
     /// The two browsers of split view. The left one is also the only pane outside split view,

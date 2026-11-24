@@ -99,3 +99,43 @@ final class VisorBackgroundView: NSVisualEffectView {
         return image
     }
 }
+
+/// The visor's bottom edge. Dragging it makes the visor taller or shorter, so it can be pulled
+/// up off something underneath; double-clicking it restores the default height.
+final class VisorResizeHandle: NSView {
+    /// Called while dragging with the bottom edge's new y position, in screen coordinates.
+    var onDrag: ((CGFloat) -> Void)?
+    var onEnd: (() -> Void)?
+    var onReset: (() -> Void)?
+    /// Distance from the window's bottom edge to the mouse when the drag started.
+    private var grabOffset: CGFloat = 0
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: Self.cursor)
+    }
+
+    private static var cursor: NSCursor {
+        if #available(macOS 15, *) {
+            return .frameResize(position: .bottom, directions: .all)
+        }
+        return .resizeUpDown
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            onReset?()
+            return
+        }
+        grabOffset = NSEvent.mouseLocation.y - (window?.frame.minY ?? 0)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        onDrag?(NSEvent.mouseLocation.y - grabOffset)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if event.clickCount < 2 { onEnd?() }
+    }
+}

@@ -19,9 +19,10 @@ final class BrowserViewController: NSViewController {
     private let foldersOnTopButton = NSButton()
     private let viewModeControl = NSSegmentedControl()
     private let fileList = FileListController()
+    private let iconView = FileIconController()
     private let contentView = NSView()
     private var viewMode: Settings.ViewMode
-    /// The folder shown in list view; a node from `root`'s tree whenever it lies inside the root.
+    /// The folder shown in list or icon view; a node from `root`'s tree whenever it lies inside the root.
     private var listFolder: FileNode?
     private let tabBar = TabBarView()
     private var tabBarHeight: NSLayoutConstraint!
@@ -36,6 +37,8 @@ final class BrowserViewController: NSViewController {
         self.refreshVisibleColumns(onlyIn: paths)
     }
     private var renameField: RenameField?
+    /// The name label under the rename field, hidden until renaming ends.
+    private var renamedLabel: NSTextField?
     private var renameTimer: Timer?
     private var needsRefreshAfterRename = false
 
@@ -119,7 +122,7 @@ final class BrowserViewController: NSViewController {
         splitView.isVertical = true
         splitView.dividerStyle = .thin
         splitView.addArrangedSubview(sidebar.scrollView)
-        for content in [browser, fileList.scrollView] as [NSView] {
+        for content in [browser, fileList.scrollView, iconView.scrollView] as [NSView] {
             content.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(content)
             NSLayoutConstraint.activate([
@@ -234,9 +237,10 @@ final class BrowserViewController: NSViewController {
         configureHeaderButton(sortButton, symbol: "arrow.up.arrow.down", tip: "Sort By", action: #selector(sortClicked(_:)))
         configureHeaderButton(foldersOnTopButton, symbol: "folder", tip: "", action: #selector(foldersOnTopClicked(_:)))
 
-        viewModeControl.segmentCount = 2
+        viewModeControl.segmentCount = Self.viewModes.count
         viewModeControl.trackingMode = .selectOne
-        for (segment, symbol, tip) in [(0, "list.bullet", "as List (⌘2)"), (1, "rectangle.split.3x1", "as Columns (⌘3)")] {
+        for (segment, symbol, tip) in [(0, "square.grid.2x2", "as Icons (⌘1)"), (1, "list.bullet", "as List (⌘2)"),
+                                       (2, "rectangle.split.3x1", "as Columns (⌘3)")] {
             viewModeControl.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: tip), forSegment: segment)
             viewModeControl.setToolTip(tip, forSegment: segment)
             viewModeControl.setWidth(30, forSegment: segment)
@@ -248,15 +252,18 @@ final class BrowserViewController: NSViewController {
 
     private func configureFileList() {
         fileList.host = self
+        iconView.host = self
         if pane == .right { fileList.outlineView.autosaveName = "UltimateFinderListRight" }
-        let menu = NSMenu()
-        menu.delegate = self
-        fileList.outlineView.menu = menu
+        for folderView in [fileList, iconView] as [FolderView] {
+            let menu = NSMenu()
+            menu.delegate = self
+            folderView.documentView.menu = menu
+        }
     }
 
     /// The view that should hold keyboard focus for the current mode.
     private var primaryView: NSView {
-        isListMode ? fileList.outlineView : browser
+        isFolderMode ? folderView.documentView : browser
     }
 
     func focus() {
@@ -329,12 +336,12 @@ final class BrowserViewController: NSViewController {
     // MARK: Tabs
 
     private var currentTabState: BrowserTab {
-        guard isListMode, let listFolder else {
+        guard isFolderMode, let listFolder else {
             return BrowserTab(root: root.url, selection: selectedNodes.map(\.url))
         }
         // Also record the column-view equivalent: the selected items inside the list folder, or
         // else the list folder itself (selected, so its contents show in the next column).
-        let listSelection = fileList.selectedNodes.map(\.url)
+        let listSelection = folderView.selectedNodes.map(\.url)
         var selection = listSelection.filter { $0.deletingLastPathComponent().isSameFile(as: listFolder.url) }
         if selection.isEmpty, !listFolder.url.isSameFile(as: root.url) { selection = [listFolder.url] }
         return BrowserTab(root: root.url, selection: selection, listFolder: listFolder.url, listSelection: listSelection)
@@ -352,10 +359,11 @@ final class BrowserViewController: NSViewController {
 
     private func load(_ tab: BrowserTab) {
         root = FileNode(url: tab.root)
-        browser.isHidden = isListMode
-        fileList.scrollView.isHidden = !isListMode
+        browser.isHidden = isFolderMode
+        fileList.scrollView.isHidden = viewMode != .list
+        iconView.scrollView.isHidden = viewMode != .icons
         updateViewModeControl()
-        if isListMode {
+        if isFolderMode {
             let folder = tab.listFolder ?? tab.currentFolder
             let selection = tab.listSelection ?? tab.selection.filter { $0.deletingLastPathComponent().isSameFile(as: folder) }
             showList(folder, selecting: selection)
@@ -370,13 +378,23 @@ final class BrowserViewController: NSViewController {
 
     // MARK: View modes & sorting
 
-    private var isListMode: Bool { viewMode == .list }
+    /// List and icon view show one folder at a time (`listFolder`); column view shows a path of them.
+    private var isFolderMode: Bool { viewMode != .columns }
+
+    /// The list or icon view, whichever is current (or would be, in column view).
+    private var folderView: FolderView {
+        viewMode == .icons ? iconView : fileList
+    }
+
+    private static let viewModes: [Settings.ViewMode] = [.icons, .list, .columns]
 
     func setViewMode(_ mode: Settings.ViewMode) {
         guard mode != viewMode else { return }
+        cancelPendingRename()
+        renameField?.commit()
         var state = currentTabState
-        // Entering list view starts from what the columns show.
-        if mode == .list { state.listFolder = nil; state.listSelection = nil }
+        // Leaving column view starts from what the columns show.
+        if viewMode == .columns { state.listFolder = nil; state.listSelection = nil }
         viewMode = mode
         Settings.setViewMode(mode, of: pane)
         load(state)
@@ -384,19 +402,20 @@ final class BrowserViewController: NSViewController {
     }
 
     private func updateViewModeControl() {
-        viewModeControl.selectedSegment = isListMode ? 0 : 1
+        viewModeControl.selectedSegment = Self.viewModes.firstIndex(of: viewMode) ?? 0
     }
 
     @objc private func viewModeChanged(_ sender: NSSegmentedControl) {
-        setViewMode(sender.selectedSegment == 0 ? .list : .columns)
+        guard Self.viewModes.indices.contains(sender.selectedSegment) else { return }
+        setViewMode(Self.viewModes[sender.selectedSegment])
     }
 
-    /// Shows `url` in list view, moving the root up to it if it lies outside the root.
+    /// Shows `url` in list or icon view, moving the root up to it if it lies outside the root.
     private func showList(_ url: URL, selecting selection: [URL] = []) {
         if chain(to: url) == nil, !url.isSameFile(as: root.url) { root = FileNode(url: url) }
         let folder = node(for: url)
         listFolder = folder
-        fileList.show(folder, selecting: selection)
+        folderView.show(folder, selecting: selection)
         sidebar.highlight(folder.url)
         updateSelectionUI()
     }
@@ -453,8 +472,8 @@ final class BrowserViewController: NSViewController {
         change()
         root.resortTree()
         if let listFolder, chain(to: listFolder.url) == nil { listFolder.resortTree() }
-        if isListMode {
-            fileList.reloadPreservingState()
+        if isFolderMode {
+            folderView.reloadPreservingState()
         } else {
             browser.loadColumnZero()
             restoreSelection(state.selection.compactMap(chain(to:)))
@@ -556,14 +575,14 @@ final class BrowserViewController: NSViewController {
     var showsHidden: Bool { Settings.showHiddenFiles }
 
     private var selectedNodes: [FileNode] {
-        if isListMode { return fileList.selectedNodes }
+        if isFolderMode { return folderView.selectedNodes }
         return browser.selectionIndexPaths.compactMap { browser.item(at: $0) as? FileNode }
     }
 
     /// The folder that "New Folder", paste and the status line refer to: the list folder, or the
     /// column holding the selection.
     private var focusedDirectory: FileNode {
-        if isListMode { return listFolder ?? root }
+        if isFolderMode { return listFolder ?? root }
         let column = browser.selectedColumn
         if column >= 0, let node = browser.parentForItems(inColumn: column) as? FileNode, node.isDirectory {
             return node
@@ -576,7 +595,7 @@ final class BrowserViewController: NSViewController {
         let node = FileNode(url: url)
         guard node.isDirectory else { NSSound.beep(); return }
         root = node
-        if isListMode {
+        if isFolderMode {
             showList(url)
             return
         }
@@ -587,7 +606,7 @@ final class BrowserViewController: NSViewController {
     }
 
     private func goUp() {
-        if isListMode, let listFolder {
+        if isFolderMode, let listFolder {
             let current = listFolder.url.standardizedFileURL
             guard current.path != "/" else { NSSound.beep(); return }
             showList(current.deletingLastPathComponent(), selecting: [current])
@@ -611,10 +630,10 @@ final class BrowserViewController: NSViewController {
     @objc private func showsHiddenFilesDidChange() {
         updateHiddenToggle()
         guard isPrepared else { return }
-        if isListMode {
+        if isFolderMode {
             root.invalidateTree()
             listFolder?.invalidateTree()
-            fileList.reloadPreservingState()
+            folderView.reloadPreservingState()
             updateSelectionUI()
             return
         }
@@ -685,8 +704,8 @@ final class BrowserViewController: NSViewController {
     /// `paths` limits the check to those canonical folder paths (from FSEvents); nil checks all.
     private func refreshVisibleColumns(onlyIn paths: Set<String>? = nil) {
         guard isPrepared else { return }
-        if isListMode {
-            fileList.refresh(onlyIn: paths)
+        if isFolderMode {
+            folderView.refresh(onlyIn: paths)
             updateSelectionUI()
             return
         }
@@ -711,8 +730,8 @@ final class BrowserViewController: NSViewController {
     /// Refreshes, then selects `urls` (e.g. items just created, pasted or dropped).
     private func select(_ urls: [URL]) {
         refreshVisibleColumns()
-        if isListMode {
-            fileList.select(urls)
+        if isFolderMode {
+            folderView.select(urls)
             updateSelectionUI()
             return
         }
@@ -757,6 +776,7 @@ final class BrowserViewController: NSViewController {
         let nodes = nodesWithNewIcons
         nodesWithNewIcons = []
         fileList.reloadIcons(of: nodes)
+        iconView.reloadIcons(of: nodes)
         reloadBrowserRows(of: nodes)
     }
 
@@ -775,8 +795,8 @@ final class BrowserViewController: NSViewController {
     /// Watches exactly the folders listed in the visible columns while the visor is shown.
     private func updateWatchedFolders() {
         guard isVisorShown else { return }
-        var folders = fileList.visibleFolders
-        if !isListMode {
+        var folders = folderView.visibleFolders
+        if !isFolderMode {
             guard browser.lastColumn >= 0 else { return }
             folders = (0...browser.lastColumn).compactMap { browser.parentForItems(inColumn: $0) as? FileNode }
         }
@@ -845,7 +865,7 @@ final class BrowserViewController: NSViewController {
 
     private func open(_ nodes: [FileNode]) {
         if nodes.count == 1, let folder = nodes.first, folder.isDirectory {
-            isListMode ? showList(folder.url) : setRoot(folder.url)
+            isFolderMode ? showList(folder.url) : setRoot(folder.url)
             return
         }
         for node in nodes { NSWorkspace.shared.open(node.url) }
@@ -861,6 +881,18 @@ final class BrowserViewController: NSViewController {
 
     private func showInFinder(_ nodes: [FileNode]) {
         NSWorkspace.shared.activateFileViewerSelecting(nodes.map(\.url))
+        onOpenedItems?()
+    }
+
+    /// Opens Finder's Get Info window for each item, through Finder's own "Show Info" service, so
+    /// it needs no Apple Events permission. The windows open behind the visor, so it steps aside.
+    private func showInfo(_ nodes: [FileNode]) {
+        guard !nodes.isEmpty else { NSSound.beep(); return }
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("com.ultimatefinder.visor.showInfo"))
+        let filenames = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+        pasteboard.declareTypes([filenames], owner: nil)
+        pasteboard.setPropertyList(nodes.map(\.url.path), forType: filenames)
+        guard NSPerformService("Finder/Show Info", pasteboard) else { NSSound.beep(); return }
         onOpenedItems?()
     }
 
@@ -910,6 +942,8 @@ final class BrowserViewController: NSViewController {
         field.onEnd = { [weak self, weak field] newName in
             guard let self, let field else { return }
             self.renameField = nil
+            self.renamedLabel?.isHidden = false
+            self.renamedLabel = nil
             if self.view.window?.firstResponder === field.currentEditor() {
                 self.view.window?.makeFirstResponder(self.primaryView)
             }
@@ -928,13 +962,28 @@ final class BrowserViewController: NSViewController {
     /// Lays a rename field over `node`'s name in the list or column view; nil if it isn't showing.
     private func makeRenameField(for node: FileNode) -> RenameField? {
         let name = node.url.lastPathComponent
-        if isListMode {
-            // In the outline view rather than the cell, which gets reused when rows reload.
-            let host = fileList.outlineView
-            guard let label = fileList.nameLabel(of: node) else { return nil }
+        if isFolderMode {
+            // In the list or collection view rather than the cell, which gets reused when rows reload.
+            let host = folderView.documentView
+            guard let label = folderView.nameLabel(of: node) else { return nil }
             let labelFrame = host.convert(label.frame, from: label.superview)
-            let field = RenameField(name: name, font: label.font ?? .systemFont(ofSize: NSFont.systemFontSize),
-                                    textFrame: labelFrame.insetBy(dx: 2, dy: 0), maxX: labelFrame.maxX)
+            let font = label.font ?? .systemFont(ofSize: NSFont.systemFontSize)
+            let field: RenameField
+            if viewMode == .icons {
+                // Over the name's first line, centred under the icon, free to grow past the item's edges.
+                let lineHeight = ceil(font.ascender - font.descender + font.leading)
+                let lineTop = host.isFlipped ? labelFrame.minY : labelFrame.maxY - lineHeight
+                let textFrame = NSRect(x: labelFrame.midX - 1, y: lineTop, width: 2, height: lineHeight)
+                let reach = FileIconController.itemSize.width
+                field = RenameField(name: name, font: font, textFrame: textFrame,
+                                    maxX: min(labelFrame.midX + reach, host.bounds.maxX - 2),
+                                    minX: max(labelFrame.midX - reach, host.bounds.minX + 2), centered: true)
+            } else {
+                field = RenameField(name: name, font: font, textFrame: labelFrame.insetBy(dx: 2, dy: 0), maxX: labelFrame.maxX)
+            }
+            // The field is opaque, but the old name could still peek out around a short new one.
+            label.isHidden = true
+            renamedLabel = label
             host.addSubview(field)
             return field
         }
@@ -1032,7 +1081,7 @@ final class BrowserViewController: NSViewController {
 
     /// The item whose name is under `locationInWindow`, in the current view.
     private func node(withNameAt locationInWindow: NSPoint) -> FileNode? {
-        if isListMode { return fileList.node(withNameAt: locationInWindow) }
+        if isFolderMode { return folderView.node(withNameAt: locationInWindow) }
         let point = browser.convert(locationInWindow, from: nil)
         var row = -1
         var column = -1
@@ -1157,6 +1206,7 @@ final class BrowserViewController: NSViewController {
             }
         }
         fileList.reloadLabels(of: nodes)
+        iconView.reloadLabels(of: nodes)
         reloadBrowserRows(of: nodes)
     }
 
@@ -1225,6 +1275,9 @@ final class BrowserViewController: NSViewController {
         case (kVK_ANSI_R, .command):
             guard !nodes.isEmpty else { return false }
             showInFinder(nodes)
+        case (kVK_ANSI_I, .command):
+            guard !nodes.isEmpty else { return false }
+            showInfo(nodes)
         case (kVK_ANSI_Period, [.command, .shift]):
             showsHiddenFiles.toggle()
         default:
@@ -1233,10 +1286,12 @@ final class BrowserViewController: NSViewController {
         return true
     }
 
-    /// ⌘2 / ⌘3 switch between list and column view, as in Finder; ⌘T, ⌘W (with 2+ tabs),
+    /// ⌘1 / ⌘2 / ⌘3 switch between icon, list and column view, as in Finder; ⌘T, ⌘W (with 2+ tabs),
     /// ⌃Tab / ⌃⇧Tab and ⇧⌘] / ⇧⌘[ manage tabs.
     private func handleWindowKey(_ event: NSEvent) -> Bool {
         switch (Int(event.keyCode), event.modifierFlags.userModifiers) {
+        case (kVK_ANSI_1, .command):
+            setViewMode(.icons)
         case (kVK_ANSI_2, .command):
             setViewMode(.list)
         case (kVK_ANSI_3, .command):
@@ -1413,27 +1468,13 @@ extension BrowserViewController: NSMenuDelegate {
         menu.removeAllItems()
         sharePicker = nil
 
-        if isListMode {
-            prepareListMenuTargets()
+        if isFolderMode {
+            menuNodes = folderView.menuTargets()
+            menuFolder = listFolder ?? root
         } else {
             prepareColumnMenuTargets()
         }
         buildMenu(menu)
-    }
-
-    /// Right-clicking an unselected row selects it first, like Finder.
-    private func prepareListMenuTargets() {
-        let outline = fileList.outlineView
-        let row = outline.clickedRow
-        menuNodes = []
-        menuFolder = listFolder ?? root
-        guard row >= 0, let clicked = outline.item(atRow: row) as? FileNode else { return }
-        if fileList.selectedNodes.contains(where: { $0 === clicked }) {
-            menuNodes = fileList.selectedNodes
-        } else {
-            outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            menuNodes = [clicked]
-        }
     }
 
     private func prepareColumnMenuTargets() {
@@ -1475,6 +1516,7 @@ extension BrowserViewController: NSMenuDelegate {
             }
             if let openWith = openWithItem(for: nodes) { menu.addItem(openWith) }
             addItem(to: menu, "Quick Look \(subject)", #selector(menuQuickLook))
+            addItem(to: menu, "Get Info", #selector(menuGetInfo))
             menu.addItem(.separator())
             addItem(to: menu, "Show in Finder", #selector(menuShowInFinder))
             addItem(to: menu, "Cut \(subject)", #selector(menuCut))
@@ -1532,6 +1574,7 @@ extension BrowserViewController: NSMenuDelegate {
         let changed = nodes.filter { $0.reloadLabel() }
         if !changed.isEmpty {
             fileList.reloadLabels(of: changed)
+            iconView.reloadLabels(of: changed)
             reloadBrowserRows(of: changed)
         }
         let shared = Set(nodes.map(\.labelNumber))
@@ -1598,6 +1641,7 @@ extension BrowserViewController: NSMenuDelegate {
     }
     @objc private func menuQuickLook() { toggleQuickLook() }
     @objc private func menuShowInFinder() { showInFinder(menuNodes) }
+    @objc private func menuGetInfo() { showInfo(menuNodes) }
     @objc private func menuCut() { cutToPasteboard(menuNodes) }
     @objc private func menuCopy() { copyToPasteboard(menuNodes) }
     @objc private func menuCopyPath() { copyPaths(menuNodes) }
@@ -1698,12 +1742,8 @@ extension BrowserViewController: QuickLookControlling, QLPreviewPanelDataSource,
 
     func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
         guard let url = item.previewItemURL, let window = view.window else { return .zero }
-        if isListMode {
-            guard let row = fileList.row(for: url) else { return .zero }
-            let outline = fileList.outlineView
-            let cell = outline.frameOfCell(atColumn: 0, row: row)
-            let iconRect = NSRect(x: cell.minX + 2, y: cell.midY - 8, width: 16, height: 16)
-            return window.convertToScreen(outline.convert(iconRect, to: nil))
+        if isFolderMode {
+            return folderView.iconFrameInWindow(of: url).map(window.convertToScreen) ?? .zero
         }
         for path in browser.selectionIndexPaths {
             guard let node = browser.item(at: path) as? FileNode, node.url == url, let row = path.last else { continue }

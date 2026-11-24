@@ -79,7 +79,7 @@ Sources/UltimateFinder/
   main.swift                     single-instance guard, accessory app bootstrap
   AppDelegate.swift              menu-bar item & settings menu, hotkey wiring, Quick Look fallback controller
   GlobalHotKey.swift             Carbon hotkey + Accessibility fallback and explanation
-  VisorPanel.swift               borderless non-activating NSPanel, rounded-bottom vibrancy background
+  VisorPanel.swift               borderless non-activating NSPanel, rounded-bottom vibrancy background, bottom-edge resize handle
   VisorController.swift          active-screen placement, slide animation, focus, Esc/Space handling
   DualPaneController.swift       split view: one or two browser panes, key / Quick Look routing to the active one
   BrowserViewController.swift    one pane: path bar, tabs, sidebar split, NSBrowser (item API), DnD, context menu, shortcuts, Quick Look
@@ -91,6 +91,7 @@ Sources/UltimateFinder/
   PreviewViewController.swift    preview column (thumbnail + Kind/Size/Dates)
   FileNode.swift                 cached directory model, icon previews, color labels, shared sort order
   FileListController.swift       list view (NSOutlineView, sortable columns)
+  FileIconController.swift       icon view (NSCollectionView grid); FolderView protocol shared with list view
   RenameField.swift              inline rename field laid over an item's name
   DirectoryWatcher.swift         kqueue watcher for the visible columns
   FileOperations.swift           Finder-style copy/move/unique names, new folder/text file, color-label tags
